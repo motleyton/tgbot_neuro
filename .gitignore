@@ -1,0 +1,6 @@
+.venv
+test.py
+bot/lid.176.bin
+bot/faiss_index
+.env
+service_account_file.json

@@ -1,0 +1,28 @@
+{
+    "uz": {
+        "help_description": "Yordam xabarini ko'rsatish",
+        "disallowed": "Kechirasiz, Sizga bu botdan foydalanish taqiqlangan.",
+        "help_text": [
+            "Eng aniq javobni olish uchun ushbu tavsiyalarga amal qiling:",
+            "1. Aniq bo'ling: Savolingiz qanchalik aniq bo'lsa, javob ham shunchalik yaxshi bo'ladi.",
+            "2. Aniqlik uchun to'liq jumlalardan foydalaning.",
+            "3. Savolingiz kontekstini aniqlashtiring.",
+            "4. Bir marta murojaat qilganda bir savol bering.",
+            "5. Ikki ma'nolilikdan va noaniqlikdan qoching."
+        ]
+    },
+
+    "ru": {
+        "help_description": "Показать справочное сообщение",
+        "disallowed": "Извините, Вам запрещено использовать этого бота.",
+        "help_text": [
+            "Чтобы получить наиболее точный ответ, следуйте этим рекомендациям:",
+            "1. Будьте точными: Чем четче Ваш вопрос, тем лучше ответ.",
+            "2. Используйте полные предложения для ясности.",
+            "3. Уточняйте контекст вопроса.",
+            "4. Задавайте один вопрос за обращение.",
+            "5. Избегайте двусмысленности и неоднозначности."
+        ]
+    }
+
+}
