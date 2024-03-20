@@ -2,7 +2,7 @@ import logging
 import random
 from typing import Dict, Set
 import telegram
-from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
+from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, ReplyKeyboardMarkup, KeyboardButton
 from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, \
     filters, ContextTypes, CallbackContext, CallbackQueryHandler
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
@@ -75,7 +75,7 @@ class ChatGPTTelegramBot:
         keyboard = [
             [
                 InlineKeyboardButton("Русский", callback_data='ru'),
-                InlineKeyboardButton("Узбекский", callback_data='uz')
+                InlineKeyboardButton("Uzbek", callback_data='uz')
             ]
         ]
         reply_markup = InlineKeyboardMarkup(keyboard)
@@ -98,22 +98,35 @@ class ChatGPTTelegramBot:
         # Сохраняем выбранный язык в словаре user_languages
         self.user_languages[user_id] = language
         welcome_message_rus = ''' 
-        Вы выбрали русский язык. А теперь расскажем про возможности бота. 🧙‍♂️ Это ваш персональный нейро-тьютор. Ему можно задавать вопросы по урокам. Дополнительно бот будет дарить вам полезные памятки и ссылки. 🌸 Попробуйте сейчас спросить, что такое таргетированная реклама.
-        '''
+          Вы выбрали русский язык.\n\nА теперь расскажем про возможности бота. 🧙‍♂️ Это ваш персональный нейро-тьютор. Ему можно задавать вопросы по урокам. \n\nКаждый понедельник в 12:00 вам будут приходить подарки от бота с полезными памятками и чек-листами🌸 \n\nПопробуйте сейчас спросить, что такое таргетированная реклама.\n\nВот доступные Вам команды:\n\n🔘Начать: Нажмите, чтобы начать заново использовать бота.\n\n🔘Помощь: Получите справочное сообщение.\n\n🔘Содержание курса: Просмотрите доступные разделы и материалы курса.
+          '''
 
         welcome_message_uz = '''
-        Siz rus tilini tanladingiz. Endi botning imkoniyatlari haqida gapiraylik. 🧙‍♂️ Bu sizning shaxsiy neyro-o’qituvchingiz. Unga darslar haqida savollar berishingiz mumkin. Bundan tashqari, bot sizga foydali eslatmalar va havolalar beradi. 🌸 Endi maqsadli reklama nima ekanligini soʻrab koʻring.
-        '''
+          Siz rus tilini tanladingiz.\n\nEndi botning imkoniyatlari haqida gapiraylik. 🧙‍♂️ Bu sizning shaxsiy neyro-o’qituvchingiz. Unga darslar haqida savollar berishingiz mumkin. \n\nHar dushanba kuni soat 12:00 da siz botdan foydali eslatmalar va nazorat varaqlari bilan sovg'a olasiz🌸 \n\nEndi maqsadli reklama nima ekanligini soʻrab koʻring.\n\nMana siz uchun mavjud buyruqlar:\n\n🔘Boshlash: Botdan qayta foydalanishni boshlash uchun bosing.\n\n🔘Yordam: Ma'lumot xabarini oling.\n\n🔘Kurs tarkibi: Kursning mavjud bo'limlari va materiallarini ko'rib chiqing.
+          '''
 
-    # Отправляем подтверждающее сообщение на выбранном языке
+        # Отправляем подтверждающее сообщение на выбранном языке
         if language == 'ru':
             confirmation_message = welcome_message_rus
+            commands = ["/Начать", "/Помощь", "/Содержание курса"]
+            command_callbacks = ["/start", "/help", "/course_content"]
+
         elif language == 'uz':
             confirmation_message = welcome_message_uz
+            commands = ["/ Boshlash", "/ Yordam", "/ Kurs_tarkibi"]
+            command_callbacks = ["/start", "/help", "/course_content"]
+
+        commands_keyboard = [[KeyboardButton(cmd)] for cmd in commands]
+        commands_markup = ReplyKeyboardMarkup(commands_keyboard, resize_keyboard=True, one_time_keyboard=True)
+
         await query.edit_message_text(text=confirmation_message)
+        await query.message.delete()
+
+        await context.bot.send_message(chat_id=user_id, text=confirmation_message, reply_markup=commands_markup)
 
         # Обновляем язык бота в конфигурации
         self.config['bot_language'] = language
+
 
     async def help(self, update: Update, context: CallbackContext) -> None:
         """
@@ -150,9 +163,28 @@ class ChatGPTTelegramBot:
 
         user_id = update.message.from_user.id
         user_message = update.message.text
+
         user_language = self.user_languages.get(user_id, self.config.get('default_language', 'ru'))
 
-        # Определение языка входящего сообщения с использованием FastText
+        if user_language == 'ru':
+            if user_message == '/Начать':
+                await self.start(update, context)
+            elif user_message == '/Помощь':
+                await self.help(update, context)
+            elif user_message == '/Содержание курса':
+                await self.course_content(update, context)
+
+        elif user_language == 'uz':
+            if user_message == '/ Boshlash':
+                await self.start(update, context)
+            elif user_message == '/ Yordam':
+                await self.help(update, context)
+            elif user_message == '/ Kurs_tarkibi':
+                await self.course_content(update, context)
+
+        if user_message.startswith('/'):
+            return
+
         try:
             predictions = self.model.predict(user_message, k=1)  # k=1 возвращает самый вероятный язык
             detected_language = predictions[0][0].replace("__label__", "")
@@ -167,8 +199,8 @@ class ChatGPTTelegramBot:
             await update.message.reply_text(error_message)
             return
 
-        processing_message = "Пока ваш запрос обрабатывается, ловите котика" if user_language == 'ru' \
-            else "Hozircha so’rovingiz ko’rib chiqilmoqda, mushukchani tuting"
+        processing_message = "Пока ваш запрос обрабатывается, ловите котика \n\n*Обращаем внимание, что подготовка ответа может занимать время до 1 минуты " if user_language == 'ru' \
+            else "Hozircha so’rovingiz ko’rib chiqilmoqda, mushukchani tuting \n\n*Diqqat qiling, javobni tayyorlash bir daqiqagacha vaqt olishi mumkin"
         processing_message_id = await update.message.reply_text(processing_message)
 
         # Отправка случайного стикера
@@ -205,52 +237,72 @@ class ChatGPTTelegramBot:
         await update.message.reply_text(content[:4096])  # Telegram имеет ограничение в 4096 символов на сообщение
 
     async def send_files_by_counter(self, service) -> None:
-        """
-        Sends files to users based on a counter which iterates through the files.
-
-        Args:
-            service: The Google Drive API service instance.
-        """
-
-        caption_text_dict = {}
         global counter
+
+        if self.counter > 8:  # Если счетчик превысил количество файлов, прекратить выполнение
+            return
+
         for user_id in self.active_users:
-
-            user_language = self.user_languages.get(user_id, self.config.get('default_language'))
-
-
-            # Определение ID папок в зависимости от выбранного языка
-            jpg_folder_id = self.checklists_folder_jpg_rus if user_language == 'ru' else self.checklists_folder_jpg_uz
-            pdf_folder_id = self.checklists_folder_pdf_rus if user_language == 'ru' else self.checklists_folder_pdf_uz
-            checklists_text = self.checklists_file_id_text_rus if user_language == 'ru' else self.checklists_file_id_text_uz
-            # Получение файлов из папок
-            jpg_files = self.db.list_files_in_folder(service, jpg_folder_id)
-            pdf_files = self.db.list_files_in_folder(service, pdf_folder_id)
             try:
-                # Загрузка и разбор текста
+                chat = await self.bot.get_chat(user_id)
+                username = "@" + chat.username if chat.username else None
+
+                if username not in self.allowed_usernames:
+                    continue
+
+                user_language = self.user_languages.get(user_id, self.config.get('default_language', 'ru'))
+                jpg_folder_id, pdf_folder_id = self.get_folder_ids(user_language)
+                checklists_text = self.get_checklists_text(user_language)
+                jpg_files, pdf_files = self.get_files(service, jpg_folder_id, pdf_folder_id)
+
                 text = await self.file_sender.download_file(service, checklists_text, is_google_doc=True)
                 caption_text_dict = self.file_sender.extract_sections(text) if text else {}
+                caption_text = caption_text_dict.get(str(self.counter), "Текст не найден")
+
+                selected_files = [f for f in jpg_files + pdf_files if f['name'].startswith(str(self.counter))]
+
+                all_files_sent = True  # Флаг для отслеживания успешности отправки всех файлов
+                for file in selected_files:
+                    file_stream = await self.file_sender.download_file(service, file['id'], is_google_doc=False)
+                    success = await self.send_file(user_id, file, file_stream, caption_text)
+                    if not success:
+                        all_files_sent = False  # Если файл не отправлен, устанавливаем флаг в False
+
+                if all_files_sent:
+                    print(f"Files for counter {self.counter} were successfully sent to user {user_id}.")
+                else:
+                    print(f"Not all files for counter {self.counter} were sent successfully to user {user_id}.")
+
             except Exception as e:
-                print(f"Error downloading or parsing text: {e}")
+                print(f"Error processing user {user_id}: {e}")
 
-            caption_text = caption_text_dict.get(str(self.counter), "Текст не найден")
+        self.counter += 1  # Инкрементировать счетчик после обработки всех пользователей
 
-            selected_files = [f for f in jpg_files + pdf_files if f['name'].startswith(str(self.counter))]
+    def get_folder_ids(self, user_language):
+        jpg_folder_id = self.checklists_folder_jpg_rus if user_language == 'ru' else self.checklists_folder_jpg_uz
+        pdf_folder_id = self.checklists_folder_pdf_rus if user_language == 'ru' else self.checklists_folder_pdf_uz
+        return jpg_folder_id, pdf_folder_id
 
-            for file in selected_files:
-                file_stream = await self.file_sender.download_file(service, file['id'], is_google_doc=False)
+    def get_checklists_text(self, user_language):
+        return self.checklists_file_id_text_rus if user_language == 'ru' else self.checklists_file_id_text_uz
 
-                if file['name'].endswith('.jpg'):
-                    file_stream.seek(0)
-                    await self.bot.send_photo(chat_id=user_id, photo=file_stream, caption=caption_text)
-                elif file['name'].endswith('.pdf'):
-                    file_stream.seek(0)
-                    await self.bot.send_document(chat_id=user_id, document=file_stream, filename=file['name'])
+    def get_files(self, service, jpg_folder_id, pdf_folder_id):
+        jpg_files = self.db.list_files_in_folder(service, jpg_folder_id)
+        pdf_files = self.db.list_files_in_folder(service, pdf_folder_id)
+        return jpg_files, pdf_files
 
-        if caption_text_dict:
-            self.counter = (self.counter % len(caption_text_dict)) + 1
-        else:
-            self.counter += 1
+    async def send_file(self, user_id, file, file_stream, caption_text):
+        try:
+            if file['name'].endswith('.jpg'):
+                file_stream.seek(0)
+                await self.bot.send_photo(chat_id=user_id, photo=file_stream, caption=caption_text)
+            elif file['name'].endswith('.pdf'):
+                file_stream.seek(0)
+                await self.bot.send_document(chat_id=user_id, document=file_stream, filename=file['name'])
+            return True  # Возвращает True, если файл успешно отправлен
+        except Exception as e:
+            print(f"Failed to send file {file['name']} to user {user_id}: {e}")
+            return False  # Возвращает False, если во время отправки произошла ошибка
 
     def start_scheduler(self) -> None:
         """
@@ -258,7 +310,7 @@ class ChatGPTTelegramBot:
         """
 
         scheduler = AsyncIOScheduler()
-        scheduler.add_job(self.send_files_by_counter, 'interval', seconds=20, args=[self.service])
+        scheduler.add_job(self.send_files_by_counter, 'interval', seconds=120, args=[self.service])
         scheduler.start()
 
     def run(self) -> None:
@@ -276,7 +328,6 @@ class ChatGPTTelegramBot:
         application.add_handler(CommandHandler('course_content', self.course_content))
         application.add_handler(CallbackQueryHandler(self.button))
         application.add_handler(MessageHandler(filters.TEXT & (~filters.COMMAND), self.message_handler))
-
         application.add_error_handler(error_handler)
         self.start_scheduler()
 
