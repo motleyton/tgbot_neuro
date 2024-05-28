@@ -128,6 +128,7 @@ class ChatGPTTelegramBot:
         # Обновляем язык бота в конфигурации
         self.config['bot_language'] = language
 
+
     async def help(self, update: Update, context: CallbackContext) -> None:
         """
         Sends a help message to the user.
