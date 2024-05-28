@@ -12,8 +12,8 @@ from database_helper import Database
 
 
 # Load translations
-parent_dir_path = os.path.join(os.path.dirname(__file__), os.pardir)
-translations_file_path = os.path.join(parent_dir_path, 'translations.json')
+
+translations_file_path = os.path.join('translations.json')
 with open(translations_file_path, 'r', encoding='utf-8') as f:
     translations = json.load(f)
 
@@ -93,6 +93,7 @@ class OpenAI:
             Добавьте полезные советы или рекомендации, которые могут способствовать более глубокому пониманию темы.
             Не повторяй вопрос. 
             Не начинай ответ со слов "Ответ:" или "Нейроконсультант:"
+            В случае, если соответствующая информация отсутствует или запрос не может быть однозначно интерпретирован на основе доступных данных, верните ответ: "Извините, но в материалах курса нет информации по вашему запросу."
 
         '''
 

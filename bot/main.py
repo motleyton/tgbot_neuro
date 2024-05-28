@@ -16,14 +16,6 @@ def main():
         level=logging.INFO
     )
 
-    # Check if the required environment variables are set
-    required_values = ['TELEGRAM_BOT_TOKEN', 'OPENAI_API_KEY']
-    if missing_values := [
-        value for value in required_values if os.environ.get(value) is None
-    ]:
-        logging.error(f'The following environment values are missing in your .env: {", ".join(missing_values)}')
-        exit(1)
-
     # Setup configurations
     model = os.environ.get('OPENAI_MODEL')
     openai_config = {
@@ -38,7 +30,7 @@ def main():
     }
 
     telegram_config = {
-        'users': os.environ.get('FILE_ID_USERS'),
+        'users': os.environ.get('FILE_XLS_USERS'),
         'token': os.environ['TELEGRAM_BOT_TOKEN'],
         'bot_language': os.environ.get('BOT_LANGUAGE', 'ru'),
         'embeddings_folder_id': os.environ['EMBEDDINGS_FOLDER_ID'],

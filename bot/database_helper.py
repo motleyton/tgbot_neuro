@@ -1,9 +1,13 @@
+import json
+
 from langchain_community.document_loaders import GoogleDriveLoader
 from langchain_openai import OpenAIEmbeddings
 from langchain.text_splitter import RecursiveCharacterTextSplitter, MarkdownHeaderTextSplitter
 import openai
 from langchain_community.vectorstores.faiss import FAISS
 import logging
+from googleapiclient.discovery import build
+from google.oauth2.service_account import Credentials
 
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
@@ -13,10 +17,16 @@ class Database:
     def __init__(self, config: dict):
         self.embeddings_folder_id = config['embeddings_folder_id']
         self.service_account = config['service_account']
+        with open(self.service_account, 'r') as file:
+            service_account_info = json.load(file)
+
+        self.creds = Credentials.from_service_account_info(service_account_info)
+        self.service = build('sheets', 'v4', credentials=self.creds)
         self.language_file_ids = {
             'ru': config['content_id_rus'],
             'uz': config['content_id_uz']
         }
+        self.range_name = "A2:A"
 
     def open_database(self):
         try:
@@ -76,14 +86,19 @@ class Database:
 
     def get_usernames(self, file_id_users):
         try:
-            loader = GoogleDriveLoader(document_ids=[file_id_users], service_account_key=self.service_account)
-            docs = loader.load()
+            # Вызов API для чтения данных из таблицы
+            result = self.service.spreadsheets().values().get(
+                spreadsheetId=file_id_users,
+                range=self.range_name
+            ).execute()
+            rows = result.get('values', [])
 
-            if docs:
-                usernames = docs[0].page_content.splitlines()  # Предполагается, что каждый юзернейм на новой строке
-                return [username.strip().replace('\ufeff', '') for username in usernames]
-            else:
+            if not rows:
                 return []
+
+            # Предполагается, что каждый юзернейм находится в отдельной строке первой колонки
+            return [row[0].strip().replace('\ufeff', '') for row in rows if row]
+
         except Exception as e:
             logger.exception(f"Произошла ошибка при загрузке списка пользователей: {e}")
             return []

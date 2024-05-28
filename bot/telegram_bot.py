@@ -12,6 +12,7 @@ from openai_helper import localized_text, OpenAI
 import fasttext
 from file_sender import FileSender
 
+
 class ChatGPTTelegramBot:
     """
     A Telegram bot integrated with OpenAI's GPT model and capable of sending automated files.
@@ -127,7 +128,6 @@ class ChatGPTTelegramBot:
         # Обновляем язык бота в конфигурации
         self.config['bot_language'] = language
 
-
     async def help(self, update: Update, context: CallbackContext) -> None:
         """
         Sends a help message to the user.
@@ -136,7 +136,7 @@ class ChatGPTTelegramBot:
             update (Update): The incoming update.
             context (CallbackContext): The context of the callback.
         """
-        
+
         user_id = update.message.from_user.id
         username = "@" + update.message.from_user.username if update.message.from_user.username else None
 
@@ -222,7 +222,7 @@ class ChatGPTTelegramBot:
 
     async def course_content(self, update: Update, context: CallbackContext) -> None:
         """
-        Sends the course content to the user.
+        Sends the course content to the user, if they are allowed to access it.
 
         Args:
             update (Update): The incoming update.
@@ -231,10 +231,18 @@ class ChatGPTTelegramBot:
 
         user_id = update.effective_user.id
         user_language = self.user_languages.get(user_id, self.config.get('default_language', 'ru'))
+        username = "@" + update.message.from_user.username if update.message.from_user.username else None
 
-        # Используйте ваш Database класс для получения текста курса
+        # Проверяем, разрешён ли доступ пользователю
+        if username not in self.allowed_usernames:
+            disallowed_message = localized_text('disallowed', self.config['bot_language'])
+            await update.message.reply_text(disallowed_message, disable_web_page_preview=True)
+            return
+
+        # Получаем контент курса из базы данных
         content = self.db.get_course_content(language=user_language)
-        await update.message.reply_text(content[:4096])  # Telegram имеет ограничение в 4096 символов на сообщение
+        # Отправляем контент, учитывая ограничение Telegram на размер сообщения
+        await update.message.reply_text(content[:4096])
 
     async def send_files_by_counter(self, service) -> None:
         global counter

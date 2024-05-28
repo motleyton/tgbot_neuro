@@ -11,6 +11,7 @@ charset-normalizer==3.3.2
 dataclasses-json==0.6.4
 distro==1.9.0
 exceptiongroup==1.2.0
+faiss-cpu==1.8.0
 faiss-gpu==1.7.2
 fasttext==0.9.2
 frozenlist==1.4.1
