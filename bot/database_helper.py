@@ -26,7 +26,7 @@ class Database:
             'ru': config['content_id_rus'],
             'uz': config['content_id_uz']
         }
-        self.range_name = "A2:A"
+        self.range_name = "Sheet1!A1:C"
 
     def open_database(self):
         try:
@@ -84,22 +84,52 @@ class Database:
             logger.exception(f"An error occurred while listing files in folder: {e}")
             return []
 
-    def get_usernames(self, file_id_users):
+    def get_usernames_and_counters(self, file_id_users):
         try:
-            # Вызов API для чтения данных из таблицы
+            # Имя листа и диапазон для чтения, например 'Sheet1' и весь лист
             result = self.service.spreadsheets().values().get(
                 spreadsheetId=file_id_users,
                 range=self.range_name
             ).execute()
             rows = result.get('values', [])
+            if not rows or len(rows) < 1:
+                return {}
 
-            if not rows:
-                return []
+            # Получаем индексы столбцов по их названиям из первой строки
+            headers = rows[0]
+            username_index = headers.index('username') if 'username' in headers else None
+            counter_index = headers.index('counter') if 'counter' in headers else None
+            if username_index is None or counter_index is None:
+                logger.error("Не найдены необходимые столбцы: 'username' или 'counter'. Проверьте заголовки столбцов.")
+                return {}
 
-            # Предполагается, что каждый юзернейм находится в отдельной строке первой колонки
-            return [row[0].strip().replace('\ufeff', '') for row in rows if row]
+            data = {}
+            # Обрабатываем все строки начиная со второй
+            for i, row in enumerate(rows[1:], start=2):  # Начинаем с 2, так как rows[1] это данные после заголовков
+                if len(row) > username_index:
+                    username = row[username_index].strip()
+                    counter = int(row[counter_index].strip()) if len(row) > counter_index and row[
+                        counter_index].strip().isdigit() else 1
+                    if username:
+                        data[username] = (counter, i)  # Сохраняем счетчик и номер строки
+            return data
 
         except Exception as e:
-            logger.exception(f"Произошла ошибка при загрузке списка пользователей: {e}")
-            return []
+            logger.exception(f"Произошла ошибка при загрузке данных: {e}")
+            return {}
 
+    def update_counter(self, file_id_users, username, new_counter, row_number):
+        try:
+            range_to_update = f"Sheet1!C{row_number}"  # Предполагаем, что счетчик в столбце C
+            value_range_body = {
+                "values": [[str(new_counter)]],
+                "majorDimension": "ROWS"
+            }
+            self.service.spreadsheets().values().update(
+                spreadsheetId=file_id_users,
+                range=range_to_update,
+                valueInputOption="USER_ENTERED",
+                body=value_range_body
+            ).execute()
+        except Exception as e:
+            logger.exception(f"Ошибка при обновлении счетчика для пользователя {username}: {e}")

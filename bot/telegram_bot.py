@@ -36,7 +36,6 @@ class ChatGPTTelegramBot:
         self.openai = openai
         self.db = Database(config)
         self.file_id_users = config['users']
-        self.allowed_usernames = self.db.get_usernames(self.file_id_users)
         self.user_languages: Dict[int, str] = {}
         self.stickers_ids = config['stickers_ids']
         self.model = fasttext.load_model('lid.176.bin')
@@ -66,9 +65,14 @@ class ChatGPTTelegramBot:
         self.active_users.add(user_id)
         bot_language = self.config['bot_language']
         username = "@" + update.message.from_user.username if update.message.from_user.username else None
-        disallowed = (
-            localized_text('disallowed', bot_language))
-        if username not in self.allowed_usernames:
+        disallowed = localized_text('disallowed', bot_language)
+
+        # Получаем список пользователей и счётчиков
+        usernames_and_counters = self.db.get_usernames_and_counters(self.file_id_users)
+        usernames = list(usernames_and_counters.keys())  # Получаем ключи словаря, которые являются именами пользователей
+        # Извлекаем только имена пользователей
+        print(usernames)
+        if username not in usernames:
             await update.message.reply_text(disallowed, disable_web_page_preview=True)
             return
 
@@ -81,6 +85,7 @@ class ChatGPTTelegramBot:
         ]
         reply_markup = InlineKeyboardMarkup(keyboard)
         await update.message.reply_text(welcome_message, reply_markup=reply_markup)
+
 
     async def button(self, update: Update, context: CallbackContext) -> None:
         """
@@ -144,7 +149,7 @@ class ChatGPTTelegramBot:
         # Получаем язык пользователя; используем язык по умолчанию, если для пользователя не установлен язык
         user_language = self.user_languages.get(user_id, self.config.get('default_language', 'ru'))
 
-        if username not in self.allowed_usernames:
+        if username not in self.db.get_usernames_and_counters(self.file_id_users):
             disallowed = localized_text('disallowed', user_language)
             await update.message.reply_text(disallowed, disable_web_page_preview=True)
             return
@@ -235,7 +240,7 @@ class ChatGPTTelegramBot:
         username = "@" + update.message.from_user.username if update.message.from_user.username else None
 
         # Проверяем, разрешён ли доступ пользователю
-        if username not in self.allowed_usernames:
+        if username not in self.db.get_usernames_and_counters(self.file_id_users):
             disallowed_message = localized_text('disallowed', self.config['bot_language'])
             await update.message.reply_text(disallowed_message, disable_web_page_preview=True)
             return
@@ -246,17 +251,18 @@ class ChatGPTTelegramBot:
         await update.message.reply_text(content[:4096])
 
     async def send_files_by_counter(self, service) -> None:
-        global counter
-
-        if self.counter > 8:  # Если счетчик превысил количество файлов, прекратить выполнение
-            return
+        usernames_and_counters = self.db.get_usernames_and_counters(self.file_id_users)
 
         for user_id in self.active_users:
             try:
                 chat = await self.bot.get_chat(user_id)
                 username = "@" + chat.username if chat.username else None
 
-                if username not in self.allowed_usernames:
+                if username not in usernames_and_counters:
+                    continue
+
+                counter, row_number = usernames_and_counters[username]
+                if counter > 8:  # If the counter exceeds the number of files, stop processing for this user
                     continue
 
                 user_language = self.user_languages.get(user_id, self.config.get('default_language', 'ru'))
@@ -266,26 +272,24 @@ class ChatGPTTelegramBot:
 
                 text = await self.file_sender.download_file(service, checklists_text, is_google_doc=True)
                 caption_text_dict = self.file_sender.extract_sections(text) if text else {}
-                caption_text = caption_text_dict.get(str(self.counter), "Текст не найден")
+                caption_text = caption_text_dict.get(str(counter), "Текст не найден")
 
-                selected_files = [f for f in jpg_files + pdf_files if f['name'].startswith(str(self.counter))]
+                selected_files = [f for f in jpg_files + pdf_files if f['name'].startswith(str(counter))]
 
-                all_files_sent = True  # Флаг для отслеживания успешности отправки всех файлов
+                all_files_sent = True  # Flag to track if all files were successfully sent
                 for file in selected_files:
                     file_stream = await self.file_sender.download_file(service, file['id'], is_google_doc=False)
                     success = await self.send_file(user_id, file, file_stream, caption_text)
-                    if not success:
-                        all_files_sent = False  # Если файл не отправлен, устанавливаем флаг в False
+                    # if not success:
+                    #     all_files_sent = False  # Set the flag to False if a file was not sent
 
-                if all_files_sent:
-                    print(f"Files for counter {self.counter} were successfully sent to user {user_id}.")
-                else:
-                    print(f"Not all files for counter {self.counter} were sent successfully to user {user_id}.")
+                # if all_files_sent:
+                print(f"Files for counter {counter} were successfully sent to user {user_id}.")
+                self.db.update_counter(self.file_id_users, username, counter + 1, row_number)  # Increment counter after successful sending
 
             except Exception as e:
                 print(f"Error processing user {user_id}: {e}")
 
-        self.counter += 1  # Инкрементировать счетчик после обработки всех пользователей
 
     def get_folder_ids(self, user_language):
         jpg_folder_id = self.checklists_folder_jpg_rus if user_language == 'ru' else self.checklists_folder_jpg_uz
@@ -319,7 +323,9 @@ class ChatGPTTelegramBot:
         """
 
         scheduler = AsyncIOScheduler()
-        scheduler.add_job(self.send_files_by_counter, 'interval', seconds=120, args=[self.service])
+        # scheduler.add_job(self.send_files_by_counter, 'cron', day_of_week='mon', hour=12, minute=0, args=[self.service])
+
+        scheduler.add_job(self.send_files_by_counter, 'interval', minutes=1, args=[self.service])
         scheduler.start()
 
     def run(self) -> None:

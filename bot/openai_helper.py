@@ -13,7 +13,7 @@ from database_helper import Database
 
 # Load translations
 
-translations_file_path = os.path.join('translations.json')
+translations_file_path = os.path.join('/home/bmf/Desktop/freelance/tgbot_neuro/translations.json')
 with open(translations_file_path, 'r', encoding='utf-8') as f:
     translations = json.load(f)
 
