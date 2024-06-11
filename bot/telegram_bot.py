@@ -330,9 +330,8 @@ class ChatGPTTelegramBot:
         """
 
         scheduler = AsyncIOScheduler()
-        # scheduler.add_job(self.send_files_by_counter, 'cron', day_of_week='mon', hour=12, minute=0, args=[self.service])
+        scheduler.add_job(self.send_files_by_counter, 'cron', day_of_week='mon', hour=12, minute=0, args=[self.service])
 
-        scheduler.add_job(self.send_files_by_counter, 'interval', minutes=1, args=[self.service])
         scheduler.start()
 
     def run(self) -> None:
