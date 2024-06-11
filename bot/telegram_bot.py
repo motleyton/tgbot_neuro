@@ -171,6 +171,13 @@ class ChatGPTTelegramBot:
         user_message = update.message.text
 
         user_language = self.user_languages.get(user_id, self.config.get('default_language', 'ru'))
+        username = "@" + update.message.from_user.username if update.message.from_user.username else None
+
+        # Проверяем, разрешён ли доступ пользователю
+        if username not in self.db.get_usernames_and_counters(self.file_id_users):
+            disallowed_message = localized_text('disallowed', self.config['bot_language'])
+            await update.message.reply_text(disallowed_message, disable_web_page_preview=True)
+            return
 
         if user_language == 'ru':
             if user_message == '/Начать':
